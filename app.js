@@ -1,7 +1,6 @@
 const express = require("express");
 const app = express();
 const cors = require("cors");
-const userRouter = require("./routes/user.route");
 const testRouter = require("./routes/test.route");
 const fileUpload = require('express-fileupload');
 
@@ -15,9 +14,6 @@ app.use(
   fileUpload({ useTempFiles: true })
 );
 
-
-
-app.use("/users", userRouter);
 
 app.use("/check", testRouter);
 

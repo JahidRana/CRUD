@@ -117,7 +117,7 @@ exports.deleteUser = async (req, res) => {
 
       res.send("Image deleted successfully.");
     });
-   
+
     const user_deletion_result = await user_model.deleteOne({ _id: id });
 
     if (user_deletion_result.deletedCount !== 1) {
@@ -135,19 +135,15 @@ exports.deleteUser = async (req, res) => {
 };
 
 //update users
-
 exports.updateUser = async (req, res) => {
- 
   try {
-    let uploaded_image_info;
-
-    const temp_image_file = req.files.image;
-  
-    const temp_image_file_path = temp_image_file.tempFilePath;
+    // Provided user id in the param
     const user_id = req.params.id;
 
+    // User info
     const user_info = await user_model.findOne({ _id: user_id });
 
+    // If no user exists with the provided id
     if (!user_info) {
       return res
         .status(404)
@@ -155,61 +151,40 @@ exports.updateUser = async (req, res) => {
     }
 
     // Variable to store image info after uploading it on Cloudinary
+    let uploaded_image_info;
 
+    // If the user has uploaded an image, delete the old image and upload the new image
     if (req.files && req.files.image) {
-      try {
-        // Check if public_id exists before deleting the old image
-        if (user_info.public_id) {
-          try {
-            await cloudinary.uploader.destroy(
-              user_info.public_id,
-              (error, result) => {
-                if (error) {
-                  return res
-                    .status(500)
-                    .send(`Error deleting image: ${error.message}`);
-                }
-
-                res.send("Image deleted successfully.");
-              }
-            );
-          } catch (error) {
-            console.error("An error occurred while deleting the asset:", error);
-          }
-        }
-
-
-        // Upload the new image
-        try {
-          uploaded_image_info = await cloudinary.uploader.upload(
-            temp_image_file_path,
-            {
-              folder: "employee",
-              use_filename: false,
-              unique_filename: true,
-              overwrite: false,
-            }
-          );
-
-          await fs.unlink(temp_image_file_path);
-        } catch (error) {
-          console.error("An error occurred while uploading the image:", error);
-        }
-      } catch (error) {
-        return res
-          .status(400)
-          .json({ message: "Failed to update the image", error });
+      // Check if public_id exists before deleting the old image
+      if (user_info.public_id) {
+        await cloudinary.uploader.destroy(user_info.public_id);
       }
+
+      // Temporarily uploaded image
+      const temp_image_file = req.files.image;
+
+      // Temporarily uploaded image's path
+      const temp_image_file_path = temp_image_file.tempFilePath;
+
+      // Upload the new image
+      uploaded_image_info = await cloudinary.uploader.upload(
+        temp_image_file_path,
+        {
+          folder: "employee",
+          use_filename: false,
+          unique_filename: true,
+          overwrite: false,
+        }
+      );
+
+      // Delete the temporary image from the server
+      fs.unlinkSync(temp_image_file_path);
     }
-    
+
     // Filter config for "findOneAndUpdate" function
     const filter = { _id: user_id };
 
-
-   
-    
-   
-   
+    // Update config for "findOneAndUpdate" function
     const update = {
       name: req.body.hasOwnProperty("name") ? req.body.name : user_info.name,
 
@@ -224,14 +199,16 @@ exports.updateUser = async (req, res) => {
       phone: req.body.hasOwnProperty("phone")
         ? req.body.phone
         : user_info.phone,
-      public_id:
-        req.files && req.files.image
-          ? uploaded_image_info.public_id
-          : user_info.public_id,
+
       imageUrl:
         req.files && req.files.image
           ? uploaded_image_info.secure_url
           : user_info.imageUrl,
+
+      public_id:
+        req.files && req.files.image
+          ? uploaded_image_info.public_id
+          : user_info.public_id,
     };
 
     // Options config for "findOneAndUpdate" function
