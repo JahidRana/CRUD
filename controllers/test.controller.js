@@ -2,6 +2,8 @@ const cloudinary = require("../cloudinary/cloudinary");
 const fs = require("fs");
 const user_model = require("../models/user.model");
 
+
+//Create User and save in database
 exports.createUser = async (req, res) => {
   try {
     // Check if image is uploaded
@@ -52,7 +54,7 @@ exports.createUser = async (req, res) => {
       return res.status(500).json({ message: "Failed to upload the image" });
     }
 
-    // Create the user
+    // Create  user
     const created_document = await user_model.create({
       name,
       email,
@@ -93,7 +95,7 @@ exports.getSingleUsers = async (req, res) => {
   }
 };
 
-//Delete user
+//Delete single user
 
 exports.deleteUser = async (req, res) => {
   try {
@@ -134,7 +136,56 @@ exports.deleteUser = async (req, res) => {
   }
 };
 
-//update users
+//Delete Multiple user
+
+exports.deleteMultiUser=async (req, res) => {
+  
+  try {
+    const user_ids = req.body.ids;
+
+    if (!Array.isArray(user_ids) || user_ids.length === 0) {
+      return res.status(400).json({ message: "user_ids must be a non-empty array" });
+    }
+    let totalDeleted = 0;
+    for (const id of user_ids) {
+      const user_data = await user_model.findOne({ _id: id });
+      if (!user_data) {
+        return res
+          .status(400)
+          .json({ message: `No user exists with the provided id: ${id}` });
+      }
+
+      const imagePublicId = user_data.public_id;
+
+      if (!imagePublicId) {
+        return res.status(400).send("Image Public ID is required.");
+      }
+
+      await cloudinary.uploader.destroy(imagePublicId, (error, result) => {
+        if (error) {
+          return res.status(500).send(`Error deleting image: ${error.message}`);
+        }
+      });
+
+      const user_deletion_result = await user_model.deleteOne({ _id: id });
+
+      if (user_deletion_result.deletedCount === 1) {
+        totalDeleted++; // Increment the total deleted count
+      }
+    }
+
+    return res.status(200).json({
+      message: "Users and associated images have successfully been deleted",
+      deletedCount: totalDeleted,
+    });
+  } catch (error) {
+    console.error("Error deleting users: ", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+//update users and image using cloudinary
+
 exports.updateUser = async (req, res) => {
   try {
     // Provided user id in the param
@@ -230,3 +281,56 @@ exports.updateUser = async (req, res) => {
     return res.status(500).json({ message: "An error has occurred", error });
   }
 };
+
+
+//get page for pagination
+
+exports.getPage=async (req, res) => {
+  try {
+    const page = req.query.page || 1; // Get the requested page from query parameter
+    const pageSize = 3; // Set the page size
+
+    // Calculate the skip value to skip the correct number of records
+    const skip = (page - 1) * pageSize;
+
+    // Fetch data from your data source (e.g., database)
+    const data = await user_model.find()
+      .skip(skip)
+      .limit(pageSize)
+      .exec();
+
+    // Get the total count of records for pagination
+    const totalCount = await user_model.countDocuments();
+
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    // Send the paginated data and metadata back to the client
+    res.json({
+      data,
+      currentPage: parseInt(page),
+      totalPages,
+    });
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    res.status(500).json({ error: 'An error occurred while fetching data.' });
+  }
+}
+
+
+//serach item
+exports.getSearchIteam= async(req, res) => {
+  
+  const query = req.query.query;
+  if (!query) {
+    return res.json({ results: [] });
+  }
+  try {
+  
+    const results = await user_model.find({ name: new RegExp(query, 'i') }).exec();
+    res.json({ results });
+  } catch (err) {
+    console.error('Error querying MongoDB:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+
+}
